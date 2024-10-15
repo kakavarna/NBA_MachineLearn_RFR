@@ -75,8 +75,8 @@ def main():
     print(f'Mean Squared Error: {mse}')
     
     # Get user input for home team and visitor team
+    visitor_team = 'DAL'
     home_team = 'LAC'
-    visitor_team = 'BKN'
 
     # Create a new DataFrame for the user input
     input_data = pd.DataFrame({
@@ -84,7 +84,7 @@ def main():
         'visitorCode': [visitor_team],
         'Year': [2024],   # Replace with the current or desired year
         'Month': [10],     # Replace with the current or desired month
-        'Day': [8]       # Replace with the current or desired day
+        'Day': [15]       # Replace with the current or desired day
     })
 
     # Encode the input data (only homeCode and visitorCode)
