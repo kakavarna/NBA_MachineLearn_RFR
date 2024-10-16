@@ -151,9 +151,9 @@ def getNbaGameDay(headers, baseurl, datestring):
 def main():
     lastDateChecked = getLastDateCheck()
     todaysDate = datetime.date.today()
-    while lastDateChecked <= todaysDate:
+    while lastDateChecked < todaysDate:
         lastDateChecked += datetime.timedelta(days=1)
-        dailyGames = getNbaGameDay(headers, config_data['api_host'], utilFunctions.ConvertDateToString(todaysDate))
+        dailyGames = getNbaGameDay(headers, config_data['api_host'], utilFunctions.ConvertDateToString(lastDateChecked))
         for game in dailyGames:
             gameStats = getGameStats(headers, config_data['api_host'], game)
             for team in gameStats:
