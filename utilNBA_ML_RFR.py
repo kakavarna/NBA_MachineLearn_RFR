@@ -36,14 +36,15 @@ def getModelAndColumns():
     encoded_Featureframe = pd.DataFrame(encoded_Fcols, columns=encoderFEATURE.get_feature_names_out(categorical_colsFEATURE))
     
     # Drop original categorical columns and add encoded frames
-    data = data.drop(categorical_colsFEATURE, axis=1)
+    data = data.drop(categorical_colsFEATURE+['GameID'], axis=1)
     data = pd.concat([data,encoded_Featureframe],axis=1)
 
     # Define feature columns and assign feature data to X
     feature_cols = ['Year', 'Month', 'Day'] + [col for col in encoded_Featureframe.columns]
     X = data[feature_cols]
-    # Define target columns and assign target data to y
-    target_cols = [col for col in data.columns if col not in encoded_Featureframe.columns]
+    # Can choose to predict alot of stats or a few
+    target_cols = [col for col in data.columns if col not in feature_cols]
+    target_cols = ['homePoints','visitorPoints','totalPoints','homeplusminus','visitorplusminus']
     y = data[target_cols]
     
     # Split data into train and test sets

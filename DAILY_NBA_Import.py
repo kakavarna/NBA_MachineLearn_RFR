@@ -158,7 +158,7 @@ def importNBAGameData():
             gameStats = getGameStats(headers, config_data['api_host'], game)
             for team in gameStats:
                 saveGameData(game, team)
-    if(getLastDateCheck < todaysDate): 
+    if(getLastDateCheck() < todaysDate): 
         setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate))
 
 def predictTodaysGames():
@@ -185,6 +185,7 @@ def predictTodaysGames():
         wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
         predictionDict = {
             'game_id' : game_id,
+            'date' : utilFunctions.ConvertDateToString(today),
             'homeCode': home_team,
             'visitorCode': visitor_team
         }
@@ -192,11 +193,35 @@ def predictTodaysGames():
         while i < len(wantedColumns):
             predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
             i += 1
+        print("\n")
+        printDict(predictionDict)
         savePrediction(predictionDict)
             
 def savePrediction(predictionDict):
-    None
-   
+    selectSQL = "SELECT * FROM tbl_predictions WHERE game_id = " + convertStr(predictionDict.get("game_id"))
+    result = utilFunctions.selectQuery(selectSQL)
+    if(len(result)==0):
+        insertSQL = "INSERT INTO tbl_predictions(game_id,date,homeCode,visitorCode,homePoints,visitorPoints,totalPoints,homePlusMinus,visitorPlusMinus) VALUES("
+        insertSQL += convertStr(predictionDict.get("game_id")) + ","
+        insertSQL += "'" + predictionDict.get("date") + "',"
+        insertSQL += "'" + predictionDict.get("homeCode") + "',"
+        insertSQL += "'" + predictionDict.get("visitorCode") + "',"
+        insertSQL += convertStr(predictionDict.get("homePoints")) + ","
+        insertSQL += convertStr(predictionDict.get("visitorPoints")) + ","
+        insertSQL += convertStr(predictionDict.get("totalPoints")) + ","
+        insertSQL += convertStr(predictionDict.get("homeplusminus")) + ","
+        insertSQL += convertStr(predictionDict.get("visitorplusminus")) + ");"
+        try:
+            utilFunctions.executeNonQuery(insertSQL)
+        except:
+            with open(errorLogPath, "a") as myfile:
+                myfile.write("\nFaulty Insert:\n"+insertSQL)
+        return None
+
+def printDict(dict):
+    for key, value in dict.items():
+        print(f"{key}: {value}")
+
 def validateOldPredictions():
     None
         
@@ -204,7 +229,7 @@ def validateOldPredictions():
 #MAIN
 
 def main():
-    #importNBAGameData()
+    importNBAGameData()
     predictTodaysGames()
     #validateOldPredictions()
 
