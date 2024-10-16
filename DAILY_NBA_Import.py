@@ -6,7 +6,8 @@ import json
 import utilFunctions
 from utilFunctions import convertStr
 import datetime
-
+import utilNBA_ML_RFR
+import pandas as pd
 
 ######################################################################
 #GLOBAL VARIABLES
@@ -19,6 +20,7 @@ headers = {
 }
 
 errorLogPath = "C:\\Users\\vinay\\Documents\\dataImportErrors.txt"
+model = None
 
 ######################################################################
 #FUNCTIONS
@@ -145,10 +147,8 @@ def getNbaGameDay(headers, baseurl, datestring):
         print(f"Failed to retrieve data: {response.status_code}")
         return None
 
-######################################################################
-#MAIN
-
-def main():
+#FUNCTION importNBAGameData - updates nba game data
+def importNBAGameData():
     lastDateChecked = getLastDateCheck()
     todaysDate = datetime.date.today()
     while lastDateChecked < todaysDate:
@@ -158,7 +158,55 @@ def main():
             gameStats = getGameStats(headers, config_data['api_host'], game)
             for team in gameStats:
                 saveGameData(game, team)
-    setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate))
+    if(getLastDateCheck < todaysDate): 
+        setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate))
+
+def predictTodaysGames():
+    model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
+    today = datetime.date.today()
+    todaysGames = getNbaGameDay(headers, config_data['api_host'], utilFunctions.ConvertDateToString(today))
+    for game in todaysGames:
+        game_id = game.get("id")
+        home_team = game.get("teams").get("home").get("code")
+        visitor_team = game.get("teams").get("visitors").get("code")
+        input_data = pd.DataFrame({
+            'homeCode': [home_team],
+            'visitorCode': [visitor_team],
+            'Year': [today.year],
+            'Month': [today.month],
+            'Day': [today.day]
+        })
+        input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
+        input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
+        input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df], axis=1)
+        input_full = input_full[featureData.columns]
+        prediction = model.predict(input_full)
+        predictTable = [predictColumns,prediction]
+        wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
+        predictionDict = {
+            'game_id' : game_id,
+            'homeCode': home_team,
+            'visitorCode': visitor_team
+        }
+        i = 0
+        while i < len(wantedColumns):
+            predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
+            i += 1
+        savePrediction(predictionDict)
+            
+def savePrediction(predictionDict):
+    None
+   
+def validateOldPredictions():
+    None
+        
+######################################################################
+#MAIN
+
+def main():
+    #importNBAGameData()
+    predictTodaysGames()
+    #validateOldPredictions()
 
 ######################################################################
 #Execute
