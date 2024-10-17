@@ -221,9 +221,6 @@ def savePrediction(predictionDict):
 def printDict(dict):
     for key, value in dict.items():
         print(f"{key}: {value}")
-
-def validateOldPredictions():
-    None
         
 ######################################################################
 #MAIN
@@ -231,7 +228,6 @@ def validateOldPredictions():
 def main():
     importNBAGameData()
     predictTodaysGames()
-    #validateOldPredictions()
 
 ######################################################################
 #Execute
