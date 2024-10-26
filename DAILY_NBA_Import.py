@@ -10,7 +10,6 @@ import utilNBA_ML_RFR
 import pandas as pd
 import pytz
 from dateutil import parser
-
 ######################################################################
 #GLOBAL VARIABLES
 
@@ -20,13 +19,12 @@ headers = {
     'x-rapidapi-key': config_data['api_key'],
     'x-rapidapi-host': config_data['api_host']
 }
-
 errorLogPath = "C:\\Users\\vinay\\Documents\\dataImportErrors.txt"
 model = None
 
 ######################################################################
-#FUNCTIONS
-    
+#FUNCTIONS  
+
 #FUNCTION getGameStats - retrieves game stats based on given game ID
 def getGameStats(headers, baseurl, game):
     url = baseurl + "games/statistics"
