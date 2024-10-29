@@ -25,6 +25,17 @@ model = None
 ######################################################################
 #FUNCTIONS  
 
+#FUNCTION getLastDateCheck - checks sql table for last date api was checked for game data
+def getLastDateCheck():
+    selectSQL = "SELECT Date FROM tbl_dates WHERE NAME = 'LastDateCheck' LIMIT 1"
+    try:
+        result = utilFunctions.selectQuery(selectSQL)
+        return result[0][0]
+    except:
+        with open(errorLogPath, "a") as myfile:
+            myfile.write("\nFaulty Select:\n"+selectSQL)
+    return None
+
 #FUNCTION getGameStats - retrieves game stats based on given game ID
 def getGameStats(headers, baseurl, game):
     url = baseurl + "games/statistics"
@@ -40,7 +51,128 @@ def getGameStats(headers, baseurl, game):
         print(f"Failed to retrieve data: {response.status_code}")
         return None
 
-#FUNCTION saveGameData - takes game data and statisctic to store in sql server
+#FUNCTION getNbaGameDay - returns all games for a given date
+def getNbaGameDayEastern(headers, baseurl, date):
+    datestring = utilFunctions.ConvertDateToString(date)
+    url = baseurl + "games"
+    data = None
+    games = []
+    params = { 'date': datestring }
+    response = requests.get(url, headers=headers, params=params)
+    # Check if the request was successful
+    if response.status_code == 200:
+        data = response.json()['response']
+        #keep data if its a game for today in eastern time
+        for game in data:
+            gameTime = game.get('date').get('start')
+            gameDate = convert_iso8601_to_eastern(gameTime).date()
+            if(gameDate == date):
+                games.append(game)
+    else:
+        print(f"Failed to retrieve data: {response.status_code}")
+    #Check for the next eastern date
+    nextdate = date + datetime.timedelta(days=1)
+    nextdatestring = utilFunctions.ConvertDateToString(nextdate)
+    params = { 'date': nextdatestring }
+    response = requests.get(url, headers=headers, params=params)
+    # Check if the request was successful
+    if response.status_code == 200:
+        data = response.json()['response']
+        #keep data if its a game for today in eastern time
+        for game in data:
+            gameTime = game.get('date').get('start')
+            gameDate = convert_iso8601_to_eastern(gameTime).date()
+            if(gameDate == date):
+                games.append(game)
+    else:
+        print(f"Failed to retrieve data: {response.status_code}")
+    return games
+
+#FUNCTION getPlayerStats - retrieves player stats based on given game ID
+def getPlayerStats(headers, baseurl, gameid, season):
+    url = baseurl + "players/statistics"
+    params = {
+        'game': gameid,
+        'season': season
+    }
+    response = requests.get(url, headers=headers, params=params)
+    # Check if the request was successful
+    if response.status_code == 200:
+        data = response.json()
+        return data['response']
+    else:
+        print(f"Failed to retrieve data: {response.status_code}")
+        return None
+
+#FUNCTION importNBAGameData - updates nba player data
+def importNBAPlayerData():
+    SelectSQL = "SELECT DISTINCT game_id, season FROM tbl_games WHERE PlayerImported = 0"
+    gamesToTrack = utilFunctions.selectQuery(SelectSQL)
+    for game in gamesToTrack:
+        gameID = game[0]
+        season = game[1]
+        playerData = getPlayerStats(headers,config_data['api_host'],gameID,season)
+        for player in playerData:
+            savePlayerData(player,season)
+        updateSQL = "UPDATE tbl_games SET PlayerImported = 1 WHERE game_id = "+ convertStr(gameID)
+        utilFunctions.executeNonQuery(updateSQL)
+    None
+
+#FUNCTION importNBAGameData - updates nba game data
+def importNBAGameData():
+    lastDateChecked = getLastDateCheck()
+    todaysDate = datetime.date.today()
+    while lastDateChecked < (todaysDate):
+        dailyGames = getNbaGameDayEastern(headers, config_data['api_host'], lastDateChecked)
+        i = 0
+        for game in dailyGames:
+            status = game.get("status").get("long")
+            if(status == "Finished"):
+                gameStats = getGameStats(headers, config_data['api_host'], game)
+                for team in gameStats:
+                    saveGameData(game, team)
+        lastDateChecked += datetime.timedelta(days=1)
+    if(getLastDateCheck() < todaysDate): 
+        setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate-datetime.timedelta(days=1)))
+
+#FUNCTION predictTodaysGames - makes and stores predictions for games on todays eastern based date
+def predictTodaysGames():
+    model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
+    today = datetime.date.today()
+    todaysGames = getNbaGameDayEastern(headers, config_data['api_host'], today)
+    for game in todaysGames:
+        if(game.get("status").get("long") == "Scheduled"):
+            game_id = game.get("id")
+            home_team = game.get("teams").get("home").get("code")
+            visitor_team = game.get("teams").get("visitors").get("code")
+            input_data = pd.DataFrame({
+                'homeCode': [home_team],
+                'visitorCode': [visitor_team],
+                'Year': [today.year],
+                'Month': [today.month],
+                'Day': [today.day]
+            })
+            input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
+            input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
+            input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df], axis=1)
+            input_full = input_full[featureData.columns]
+            prediction = model.predict(input_full)
+            predictTable = [predictColumns,prediction]
+            wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
+            predictionDict = {
+                'game_id' : game_id,
+                'date' : utilFunctions.ConvertDateToString(today),
+                'homeCode': home_team,
+                'visitorCode': visitor_team
+            }
+            i = 0
+            while i < len(wantedColumns):
+                predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
+                i += 1
+            printDict(predictionDict)
+            savePrediction(predictionDict)
+
+#FUNCTION saveGameData - takes game data and statisctics to store in sql server
 def saveGameData(game, team):
     home = 0
     curTeamID = team['team']['id']
@@ -114,130 +246,38 @@ def saveGameData(game, team):
                 myfile.write("\nFaulty Insert:\n"+insertSQL)
     return None
 
-#FUNCTION getLastDateCheck - checks sql table for last date api was checked for game data
-def getLastDateCheck():
-    selectSQL = "SELECT Date FROM tbl_dates WHERE NAME = 'LastDateCheck' LIMIT 1"
+#FUNCTION savePlayerData - takes player data and statisctics to store in sql server
+def savePlayerData(playerGameStats,season):
+    InsertSQL = "INSERT INTO tbl_playerstats"
+    InsertSQL += "(player_id, game_id, season, firstName, lastName, teamName, teamCode, minutes, points, fgm, fga, fgp, ftm, fta, ftp, tpm, tpa, tpp, totReb, assists, steals, blocks) VALUES ("
+    InsertSQL += convertStr(playerGameStats['player']['id']) + ","
+    InsertSQL += convertStr(playerGameStats['game']['id']) + ","
+    InsertSQL += convertStr(season) + ","
+    InsertSQL += "'" + playerGameStats['player']['firstname'] + "',"
+    InsertSQL += "'" + playerGameStats['player']['lastname'] + "',"
+    InsertSQL += "'" + playerGameStats['team']['name'] + "',"
+    InsertSQL += "'" + playerGameStats['team']['code'] + "',"
+    InsertSQL += convertStr(playerGameStats['min']) + ","
+    InsertSQL += convertStr(playerGameStats['points']) + ","
+    InsertSQL += convertStr(playerGameStats['fgm']) + ","
+    InsertSQL += convertStr(playerGameStats['fga']) + ","
+    InsertSQL += convertStr(playerGameStats['fgp']) + ","
+    InsertSQL += convertStr(playerGameStats['ftm']) + ","
+    InsertSQL += convertStr(playerGameStats['fta']) + ","
+    InsertSQL += convertStr(playerGameStats['ftp']) + ","
+    InsertSQL += convertStr(playerGameStats['tpm']) + ","
+    InsertSQL += convertStr(playerGameStats['tpa']) + ","
+    InsertSQL += convertStr(playerGameStats['tpp']) + ","
+    InsertSQL += convertStr(playerGameStats['totReb']) + ","
+    InsertSQL += convertStr(playerGameStats['assists']) + ","
+    InsertSQL += convertStr(playerGameStats['steals']) + ","
+    InsertSQL += convertStr(playerGameStats['blocks'])
+    InsertSQL += ")"
     try:
-        result = utilFunctions.selectQuery(selectSQL)
-        return result[0][0]
+        utilFunctions.executeNonQuery(InsertSQL)
     except:
         with open(errorLogPath, "a") as myfile:
-            myfile.write("\nFaulty Select:\n"+selectSQL)
-    return None
-
-#FUNCTION setLastDateCheck - updates last date check value
-def setLastDateCheck(setDateString):
-    updateSQL = "UPDATE  tbl_dates SET DATE = '" + setDateString + "' WHERE NAME = 'LastDateCheck'"
-    try:
-        utilFunctions.executeNonQuery(updateSQL)
-    except:
-        with open(errorLogPath, "a") as myfile:
-            myfile.write("\nFaulty Update:\n"+updateSQL)
-    return None
-
-#FUNCTION getNbaGameDay - returns all games for a given date
-def getNbaGameDayEastern(headers, baseurl, date):
-    datestring = utilFunctions.ConvertDateToString(date)
-    url = baseurl + "games"
-    data = None
-    games = []
-    params = { 'date': datestring }
-    response = requests.get(url, headers=headers, params=params)
-    # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()['response']
-        #keep data if its a game for today in eastern time
-        for game in data:
-            gameTime = game.get('date').get('start')
-            gameDate = convert_iso8601_to_eastern(gameTime).date()
-            if(gameDate == date):
-                games.append(game)
-    else:
-        print(f"Failed to retrieve data: {response.status_code}")
-    #Check for the next eastern date
-    nextdate = date + datetime.timedelta(days=1)
-    nextdatestring = utilFunctions.ConvertDateToString(nextdate)
-    params = { 'date': nextdatestring }
-    response = requests.get(url, headers=headers, params=params)
-    # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()['response']
-        #keep data if its a game for today in eastern time
-        for game in data:
-            gameTime = game.get('date').get('start')
-            gameDate = convert_iso8601_to_eastern(gameTime).date()
-            if(gameDate == date):
-                games.append(game)
-    else:
-        print(f"Failed to retrieve data: {response.status_code}")
-    return games
-
-#FUNCTION convert_iso8601_to_eastern - converts iso time string to easter datetime object
-def convert_iso8601_to_eastern(iso8601_time):
-    # Parse the ISO 8601 time string using dateutil.parser
-    utc_time = parser.isoparse(iso8601_time)
-    # Define the UTC and Eastern timezone
-    utc_zone = pytz.utc
-    eastern_zone = pytz.timezone("America/New_York")
-    # Localize the time to UTC
-    utc_time = utc_time.replace(tzinfo=utc_zone)
-    # Convert to Eastern Time
-    eastern_time = utc_time.astimezone(eastern_zone)
-    return eastern_time
-
-#FUNCTION importNBAGameData - updates nba game data
-def importNBAGameData():
-    lastDateChecked = getLastDateCheck()
-    todaysDate = datetime.date.today()
-    while lastDateChecked < (todaysDate):
-        dailyGames = getNbaGameDayEastern(headers, config_data['api_host'], lastDateChecked)
-        i = 0
-        for game in dailyGames:
-            status = game.get("status").get("long")
-            if(status == "Finished"):
-                gameStats = getGameStats(headers, config_data['api_host'], game)
-                for team in gameStats:
-                    saveGameData(game, team)
-        lastDateChecked += datetime.timedelta(days=1)
-    if(getLastDateCheck() < todaysDate): 
-        setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate-datetime.timedelta(days=1)))
-
-#FUNCTION predictTodaysGames - makes and stores predictions for games on todays eastern based date
-def predictTodaysGames():
-    model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
-    today = datetime.date.today()
-    todaysGames = getNbaGameDayEastern(headers, config_data['api_host'], today)
-    for game in todaysGames:
-        if(game.get("status").get("long") == "Scheduled"):
-            game_id = game.get("id")
-            home_team = game.get("teams").get("home").get("code")
-            visitor_team = game.get("teams").get("visitors").get("code")
-            input_data = pd.DataFrame({
-                'homeCode': [home_team],
-                'visitorCode': [visitor_team],
-                'Year': [today.year],
-                'Month': [today.month],
-                'Day': [today.day]
-            })
-            input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
-            input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
-            input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df], axis=1)
-            input_full = input_full[featureData.columns]
-            prediction = model.predict(input_full)
-            predictTable = [predictColumns,prediction]
-            wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
-            predictionDict = {
-                'game_id' : game_id,
-                'date' : utilFunctions.ConvertDateToString(today),
-                'homeCode': home_team,
-                'visitorCode': visitor_team
-            }
-            i = 0
-            while i < len(wantedColumns):
-                predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
-                i += 1
-            printDict(predictionDict)
-            savePrediction(predictionDict)
+            myfile.write("\nFaulty Insert:\n"+InsertSQL)
 
 #FUNCTION savePrediction - saves row to sql table if prediction record does not exist           
 def savePrediction(predictionDict):
@@ -261,6 +301,29 @@ def savePrediction(predictionDict):
                 myfile.write("\nFaulty Insert:\n"+insertSQL)
         return None
 
+#FUNCTION setLastDateCheck - updates last date check value
+def setLastDateCheck(setDateString):
+    updateSQL = "UPDATE  tbl_dates SET DATE = '" + setDateString + "' WHERE NAME = 'LastDateCheck'"
+    try:
+        utilFunctions.executeNonQuery(updateSQL)
+    except:
+        with open(errorLogPath, "a") as myfile:
+            myfile.write("\nFaulty Update:\n"+updateSQL)
+    return None
+
+#FUNCTION convert_iso8601_to_eastern - converts iso time string to easter datetime object
+def convert_iso8601_to_eastern(iso8601_time):
+    # Parse the ISO 8601 time string using dateutil.parser
+    utc_time = parser.isoparse(iso8601_time)
+    # Define the UTC and Eastern timezone
+    utc_zone = pytz.utc
+    eastern_zone = pytz.timezone("America/New_York")
+    # Localize the time to UTC
+    utc_time = utc_time.replace(tzinfo=utc_zone)
+    # Convert to Eastern Time
+    eastern_time = utc_time.astimezone(eastern_zone)
+    return eastern_time
+
 #FUNCTION printDict - outputs a dict object in readable formate
 def printDict(dict):
     print("\n")
@@ -273,6 +336,7 @@ def printDict(dict):
 def main():
     importNBAGameData()
     predictTodaysGames()
+    importNBAPlayerData()
 
 ######################################################################
 #Execute
