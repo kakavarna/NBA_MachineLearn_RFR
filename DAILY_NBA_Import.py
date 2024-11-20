@@ -191,8 +191,7 @@ def saveGameData(game, team):
             gameScores = game['scores']['visitors']
         insertSQL = '''INSERT INTO tbl_games (game_id,league,season,
         date,teamName,teamCode,home,points,q1score,q2score,q3score,
-        q4score,plusminus,fastBreakPoints,pointsInPaint,biggestLead,
-        secondChancePoints,pointsOffTurnOvers,LongestRun,fgm,fga,fgp,
+        q4score,plusminus,fgm,fga,fgp,
         ftm,fta,ftp,tpm,tpa,tpp,offReb,defReb,totReb,assists,pFouls,
         steals,turnovers,blocks) VALUES ('''
         insertSQL += str(game['id']) + ","
@@ -212,16 +211,11 @@ def saveGameData(game, team):
             insertSQL += q2Score + ","
             insertSQL += q3Score + ","
             insertSQL += q4Score + ","
-        except:
+        except Exception as e:
+            print(e)
             with open(errorLogPath, "a") as myfile:
                 myfile.write("\nFaulty LineScore for GameID:\n" + str(game['id']))
         insertSQL += convertStr(teamStats['plusMinus']) + ","
-        insertSQL += convertStr(teamStats['fastBreakPoints']) + ","
-        insertSQL += convertStr(teamStats['pointsInPaint']) + ","
-        insertSQL += convertStr(teamStats['biggestLead']) + ","
-        insertSQL += convertStr(teamStats['secondChancePoints']) + ","
-        insertSQL += convertStr(teamStats['pointsOffTurnovers']) + ","
-        insertSQL += convertStr(teamStats['longestRun']) + ","
         insertSQL += convertStr(teamStats['fgm']) + ","
         insertSQL += convertStr(teamStats['fga']) + ","
         insertSQL += convertStr(teamStats['fgp']) + ","
@@ -241,7 +235,8 @@ def saveGameData(game, team):
         insertSQL += convertStr(teamStats['blocks']) + ");"
         try:
             utilFunctions.executeNonQuery(insertSQL)
-        except:
+        except Exception as e:
+            print(e)
             with open(errorLogPath, "a") as myfile:
                 myfile.write("\nFaulty Insert:\n"+insertSQL)
     return None
