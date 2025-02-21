@@ -169,7 +169,7 @@ def predictTodaysGames():
             while i < len(wantedColumns):
                 predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
                 i += 1
-            printDict(predictionDict)
+            #printDict(predictionDict)
             savePrediction(predictionDict)
 
 #FUNCTION saveGameData - takes game data and statisctics to store in sql server
@@ -248,8 +248,8 @@ def savePlayerData(playerGameStats,season):
     InsertSQL += convertStr(playerGameStats['player']['id']) + ","
     InsertSQL += convertStr(playerGameStats['game']['id']) + ","
     InsertSQL += convertStr(season) + ","
-    InsertSQL += "'" + playerGameStats['player']['firstname'] + "',"
-    InsertSQL += "'" + playerGameStats['player']['lastname'] + "',"
+    InsertSQL += "'" + playerGameStats['player']['firstname'].replace("'","''")  + "',"
+    InsertSQL += "'" + playerGameStats['player']['lastname'].replace("'","''") + "',"
     InsertSQL += "'" + playerGameStats['team']['name'] + "',"
     InsertSQL += "'" + playerGameStats['team']['code'] + "',"
     InsertSQL += convertStr(playerGameStats['min']) + ","
