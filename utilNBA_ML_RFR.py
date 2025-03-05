@@ -42,6 +42,7 @@ def getModelAndColumns():
     # Define feature columns and assign feature data to X
     feature_cols = ['Year', 'Month', 'Day'] + [col for col in encoded_Featureframe.columns]
     X = data[feature_cols]
+    
     # Can choose to predict alot of stats or a few
     target_cols = [col for col in data.columns if col not in feature_cols]
     target_cols = ['homePoints','visitorPoints','totalPoints','homeplusminus','visitorplusminus']
