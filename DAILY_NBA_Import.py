@@ -135,6 +135,27 @@ def importNBAGameData():
     if(getLastDateCheck() < todaysDate): 
         setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate-datetime.timedelta(days=1)))
 
+def getRollingAverages(teamCode,Home):
+    SelectSQL = "SELECT AvgTotReb,AvgFGM,AvgFGA,AvgTPM,AvgTPA,AvgFTM,AvgFTA,AvgAssists FROM view_teamrollingaverages WHERE teamCode = '" + utilFunctions.convertStr(teamCode) + "'"
+    averagedata =  utilFunctions.selectQuery(SelectSQL)
+    averagesDict = {
+        'AvgTotReb': averagedata[0][0],
+        'AvgFGM': averagedata[0][1],
+        'AvgFGA': averagedata[0][2],
+        'AvgTPM': averagedata[0][3],
+        'AvgTPA': averagedata[0][4],
+        'AvgFTM': averagedata[0][5],
+        'AvgFTA': averagedata[0][6],
+        'AvgAssists': averagedata[0][7]
+    }
+    averagesDict = {k:[v] for k,v in averagesDict.items()}
+    averagesDF = pd.DataFrame(averagesDict)
+    if(Home):
+        averagesDF = averagesDF.rename(columns=lambda col: "home"+col)
+    else:
+        averagesDF = averagesDF.rename(columns=lambda col: "visitor"+col)
+    return averagesDF
+
 #FUNCTION predictTodaysGames - makes and stores predictions for games on todays eastern based date
 def predictTodaysGames():
     model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
@@ -152,10 +173,17 @@ def predictTodaysGames():
                 'Month': [today.month],
                 'Day': [today.day]
             })
+            #get the averages to use in input
+            homeAveragesData = getRollingAverages(home_team, 1)
+            visitorAveragesData = getRollingAverages(visitor_team, 0)
+            #combine the data
+            #input_data = pd.concat([input_data,homeAveragesData,visitorAveragesData],axis=1)
+            #Encode non-numerical data
             input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
             input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
-            input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df], axis=1)
+            input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df,homeAveragesData,visitorAveragesData], axis=1)
             input_full = input_full[featureData.columns]
+            #predict and save
             prediction = model.predict(input_full)
             predictTable = [predictColumns,prediction]
             wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
@@ -169,7 +197,6 @@ def predictTodaysGames():
             while i < len(wantedColumns):
                 predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
                 i += 1
-            #printDict(predictionDict)
             savePrediction(predictionDict)
 
 #FUNCTION saveGameData - takes game data and statisctics to store in sql server

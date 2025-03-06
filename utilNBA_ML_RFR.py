@@ -40,7 +40,7 @@ def getModelAndColumns():
     data = pd.concat([data,encoded_Featureframe],axis=1)
 
     # Define feature columns and assign feature data to X
-    feature_cols = ['Year', 'Month', 'Day'] + [col for col in encoded_Featureframe.columns]
+    feature_cols = ['Year', 'Month', 'Day'] + [col for col in encoded_Featureframe.columns] + [col for col in data.columns if "Avg" in col]
     X = data[feature_cols]
     
     # Can choose to predict alot of stats or a few
