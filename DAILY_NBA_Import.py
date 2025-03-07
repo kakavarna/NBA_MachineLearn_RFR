@@ -136,17 +136,20 @@ def importNBAGameData():
         setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate-datetime.timedelta(days=1)))
 
 def getRollingAverages(teamCode,Home):
-    SelectSQL = "SELECT AvgTotReb,AvgFGM,AvgFGA,AvgTPM,AvgTPA,AvgFTM,AvgFTA,AvgAssists FROM view_teamrollingaverages WHERE teamCode = '" + utilFunctions.convertStr(teamCode) + "'"
+    SelectSQL = "SELECT AvgTotReb,AvgFGM,AvgFGA,AvgFGP,AvgTPM,AvgTPA,AvgTPP,AvgFTM,AvgFTA,AvgFTP,AvgAssists FROM view_teamrollingaverages WHERE teamCode = '" + utilFunctions.convertStr(teamCode) + "'"
     averagedata =  utilFunctions.selectQuery(SelectSQL)
     averagesDict = {
         'AvgTotReb': averagedata[0][0],
         'AvgFGM': averagedata[0][1],
         'AvgFGA': averagedata[0][2],
-        'AvgTPM': averagedata[0][3],
-        'AvgTPA': averagedata[0][4],
-        'AvgFTM': averagedata[0][5],
-        'AvgFTA': averagedata[0][6],
-        'AvgAssists': averagedata[0][7]
+        'AvgFGP': averagedata[0][3],
+        'AvgTPM': averagedata[0][4],
+        'AvgTPA': averagedata[0][5],
+        'AvgTPP': averagedata[0][6],
+        'AvgFTM': averagedata[0][7],
+        'AvgFTA': averagedata[0][8],
+        'AvgFTP': averagedata[0][9],
+        'AvgAssists': averagedata[0][10]
     }
     averagesDict = {k:[v] for k,v in averagesDict.items()}
     averagesDF = pd.DataFrame(averagesDict)
