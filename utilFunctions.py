@@ -25,9 +25,13 @@ def read_APIconfig():
     config.read('config.ini')
     api_key = config.get('API', 'api_key')
     api_host = config.get('API', 'api_host')
+    odds_api_key = config.get('API', 'odds_api_key')
+    odds_api_host = config.get('API', 'odds_api_host')
     api_values = {
         'api_key': api_key,
-        'api_host': api_host
+        'api_host': api_host,
+        'odds_api_key': odds_api_key,
+        'odds_api_host': odds_api_host
     }
     return api_values
 

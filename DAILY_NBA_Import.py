@@ -135,6 +135,7 @@ def importNBAGameData():
     if(getLastDateCheck() < todaysDate): 
         setLastDateCheck(utilFunctions.ConvertDateToString(todaysDate-datetime.timedelta(days=1)))
 
+#FUNCTION getRollingAverages - gets rolling averages from sql view
 def getRollingAverages(teamCode,Home):
     SelectSQL = "SELECT AvgTotReb,AvgFGM,AvgFGA,AvgFGP,AvgTPM,AvgTPA,AvgTPP,AvgFTM,AvgFTA,AvgFTP,AvgAssists FROM view_teamrollingaverages WHERE teamCode = '" + utilFunctions.convertStr(teamCode) + "'"
     averagedata =  utilFunctions.selectQuery(SelectSQL)
@@ -163,12 +164,15 @@ def getRollingAverages(teamCode,Home):
 def predictTodaysGames():
     model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
     today = datetime.date.today()
+    MLodds = getMoneylineOdds(utilFunctions.ConvertDateToString(today))
     todaysGames = getNbaGameDayEastern(headers, config_data['api_host'], today)
     for game in todaysGames:
         if(game.get("status").get("long") == "Scheduled"):
             game_id = game.get("id")
             home_team = game.get("teams").get("home").get("code")
             visitor_team = game.get("teams").get("visitors").get("code")
+            homeName = game.get("teams").get("home").get("name")
+            visitorName = game.get("teams").get("visitors").get("name")
             input_data = pd.DataFrame({
                 'homeCode': [home_team],
                 'visitorCode': [visitor_team],
@@ -179,14 +183,12 @@ def predictTodaysGames():
             #get the averages to use in input
             homeAveragesData = getRollingAverages(home_team, 1)
             visitorAveragesData = getRollingAverages(visitor_team, 0)
-            #combine the data
-            #input_data = pd.concat([input_data,homeAveragesData,visitorAveragesData],axis=1)
             #Encode non-numerical data
             input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
             input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
             input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df,homeAveragesData,visitorAveragesData], axis=1)
             input_full = input_full[featureData.columns]
-            #predict and save
+            #predict
             prediction = model.predict(input_full)
             predictTable = [predictColumns,prediction]
             wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
@@ -200,6 +202,10 @@ def predictTodaysGames():
             while i < len(wantedColumns):
                 predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
                 i += 1
+            for odds in MLodds:
+                if(odds['home'] == homeName and odds['away'] == visitorName):
+                    predictionDict.update(odds)
+                    break
             savePrediction(predictionDict)
 
 #FUNCTION saveGameData - takes game data and statisctics to store in sql server
@@ -309,7 +315,7 @@ def savePrediction(predictionDict):
     selectSQL = "SELECT * FROM tbl_predictions WHERE game_id = " + convertStr(predictionDict.get("game_id"))
     result = utilFunctions.selectQuery(selectSQL)
     if(len(result)==0):
-        insertSQL = "INSERT INTO tbl_predictions(game_id,date,homeCode,visitorCode,homePoints,visitorPoints,totalPoints,homePlusMinus,visitorPlusMinus) VALUES("
+        insertSQL = "INSERT INTO tbl_predictions(game_id,date,homeCode,visitorCode,homePoints,visitorPoints,totalPoints,homePlusMinus,visitorPlusMinus,homeMLodds,visitorMLodds) VALUES("
         insertSQL += convertStr(predictionDict.get("game_id")) + ","
         insertSQL += "'" + predictionDict.get("date") + "',"
         insertSQL += "'" + predictionDict.get("homeCode") + "',"
@@ -318,7 +324,9 @@ def savePrediction(predictionDict):
         insertSQL += convertStr(predictionDict.get("visitorPoints")) + ","
         insertSQL += convertStr(predictionDict.get("totalPoints")) + ","
         insertSQL += convertStr(predictionDict.get("homeplusminus")) + ","
-        insertSQL += convertStr(predictionDict.get("visitorplusminus")) + ");"
+        insertSQL += convertStr(predictionDict.get("visitorplusminus")) + ","
+        insertSQL += convertStr(predictionDict.get('home_h2h_odds')) + ","
+        insertSQL += convertStr(predictionDict.get('away_h2h_odds')) + ");"
         try:
             utilFunctions.executeNonQuery(insertSQL)
         except:
@@ -355,13 +363,80 @@ def printDict(dict):
     for key, value in dict.items():
         print(f"{key}: {value}")
         
+def predictMatchup(visitor,home,year,month,day):
+    model, featureEncoder, featureData, predictColumns = utilNBA_ML_RFR.getModelAndColumns()
+    home_team = home
+    visitor_team = visitor
+    input_data = pd.DataFrame({
+        'homeCode': [home_team],
+        'visitorCode': [visitor_team],
+        'Year': year,
+        'Month': month,
+        'Day': day
+     })
+    #get the averages to use in input
+    homeAveragesData = getRollingAverages(home_team, 1)
+    visitorAveragesData = getRollingAverages(visitor_team, 0)
+    #Encode non-numerical data
+    input_encoded = featureEncoder.transform(input_data[['homeCode', 'visitorCode']])
+    input_encoded_df = pd.DataFrame(input_encoded, columns=featureEncoder.get_feature_names_out(['homeCode', 'visitorCode']))
+    input_full = pd.concat([input_data[['Year', 'Month', 'Day']], input_encoded_df,homeAveragesData,visitorAveragesData], axis=1)
+    input_full = input_full[featureData.columns]
+    #predict and save
+    prediction = model.predict(input_full)
+    predictTable = [predictColumns,prediction]
+    wantedColumns = ['homePoints','homeplusminus','visitorPoints','visitorplusminus','totalPoints']
+    predictionDict = {
+        'homeCode': home_team,
+        'visitorCode': visitor_team
+    }
+    i = 0
+    while i < len(wantedColumns):
+        predictionDict.update({wantedColumns[i]:prediction[0,predictColumns.index(wantedColumns[i])]})
+        i += 1
+    printDict(predictionDict)
+    
+def getMoneylineOdds(today):
+    host = config_data['odds_api_host']
+    key = config_data['odds_api_key']
+    requestUrl = host + "/v4/sports/basketball_nba/odds/?apiKey=" + key + "&regions=us&markets=h2h"
+    response = requests.get(requestUrl)
+    if response.status_code == 200:
+        data = response.json()
+        odds_list = []
+        for event in data:
+            gameDate = utilFunctions.ConvertDateToString(convert_iso8601_to_eastern(event['commence_time']).date())
+            if (gameDate == today):
+                home_team = event["home_team"]
+                away_team = event["away_team"]
+                fanduel_odds = next(
+                    (book for book in event["bookmakers"] if book["title"] == "FanDuel"), None
+                )
+                if fanduel_odds:
+                    h2h_odds = fanduel_odds["markets"][0]["outcomes"]  # Assuming first market is h2h
+                    home_odds = next((odd["price"] for odd in h2h_odds if odd["name"] == home_team), None)
+                    away_odds = next((odd["price"] for odd in h2h_odds if odd["name"] == away_team), None)
+                    odds_list.append({
+                        "home": home_team,
+                        "away": away_team,
+                        "home_h2h_odds": home_odds,
+                        "away_h2h_odds": away_odds
+                    })
+        return odds_list
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+        return []
+
 ######################################################################
 #MAIN
 
 def main():
-    importNBAGameData()
+    print("--Recording Completed Games--")
+    #importNBAGameData()
+    print("--Making Predictions--")
     predictTodaysGames()
-    importNBAPlayerData()
+    print("--Getting Player Data--")
+    #importNBAPlayerData()
     print("DONE!!!!")
 
 ######################################################################
