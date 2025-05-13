@@ -260,7 +260,7 @@ def saveGameData(game, team):
         insertSQL += convertStr(teamStats['ftp']) + ","
         insertSQL += convertStr(teamStats['tpm']) + ","
         insertSQL += convertStr(teamStats['tpa']) + ","
-        insertSQL += convertStr(teamStats['tpa']) + ","
+        insertSQL += convertStr(teamStats['tpp']) + ","
         insertSQL += convertStr(teamStats['offReb']) + ","
         insertSQL += convertStr(teamStats['defReb']) + ","
         insertSQL += convertStr(teamStats['totReb']) + ","
@@ -432,11 +432,11 @@ def getMoneylineOdds(today):
 
 def main():
     print("--Recording Completed Games--")
-    #importNBAGameData()
+    importNBAGameData()
     print("--Making Predictions--")
     predictTodaysGames()
     print("--Getting Player Data--")
-    #importNBAPlayerData()
+    importNBAPlayerData()
     print("DONE!!!!")
 
 ######################################################################
