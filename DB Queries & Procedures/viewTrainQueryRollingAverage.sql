@@ -1,0 +1,102 @@
+WITH TeamStats AS (
+    SELECT 
+        game_id,
+        teamCode,
+        season,
+        totReb,
+        fgm,
+        fga,
+        fgp,
+        tpm,
+        tpa,
+        tpp,
+        ftm,
+        fta,
+        ftp,
+        assists,
+        date,
+        AVG(totReb) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_totReb,
+        AVG(fgm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_fgm,
+        AVG(fga) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_fga,
+        AVG(fgm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)/AVG(fga) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_fgp,
+        AVG(tpm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_tpm,
+        AVG(tpa) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_tpa,
+        AVG(tpm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)/AVG(tpa) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_tpp,
+        AVG(ftm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_ftm,
+        AVG(fta) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_fta,
+        AVG(ftm) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)/AVG(fta) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_ftp,
+        AVG(assists) OVER (PARTITION BY teamCode ORDER BY date ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS avg_assists
+    FROM tbl_games
+)
+
+SELECT 
+    h.game_id AS GameID,
+    h.date AS date,
+    h.teamCode AS homeCode,
+    v.teamCode AS visitorCode,
+    h.points AS homePoints,
+    v.points AS visitorPoints,
+    (h.points + v.points) AS totalPoints,
+    h.plusMinus AS homeplusminus,
+    v.plusMinus AS visitorplusminus,
+    h.fgm AS homefgm,
+    h.fga AS homefga,
+    h.fgp AS homefgp,
+    h.ftm AS homeftm,
+    h.fta AS homefta,
+    h.ftp AS homeftp,
+    h.tpm AS hometpm,
+    h.tpa AS hometpa,
+    h.tpp AS hometpp,
+    h.totReb AS homeTotReb,
+    h.assists AS homeAssists,
+    h.steals AS homeSteals,
+    h.turnovers AS homeTurnOvers,
+    h.blocks AS homeBlocks,
+    v.fgm AS visitorfgm,
+    v.fga AS visitorfga,
+    v.fgp AS visitorfgp,
+    v.ftm AS visitorftm,
+    v.fta AS visitorfta,
+    v.ftp AS visitorftp,
+    v.tpm AS visitortpm,
+    v.tpa AS visitortpa,
+    v.tpp AS visitortpp,
+    v.totReb AS visitorTotReb,
+    v.assists AS visitorAssists,
+    v.steals AS visitorSteals,
+    v.turnovers AS visitorTurnOvers,
+    v.blocks AS visitorBlocks,
+    h_stats.avg_totReb AS homeAvgTotReb,
+    h_stats.avg_fgm AS homeAvgFGM,
+    h_stats.avg_fga AS homeAvgFGA,
+    h_stats.avg_fgp AS homeAvgFGP,
+    h_stats.avg_tpm AS homeAvgTPM,
+    h_stats.avg_tpa AS homeAvgTPA,
+    h_stats.avg_tpp AS homeAvgTPP,
+    h_stats.avg_ftm AS homeAvgFTM,
+    h_stats.avg_fta AS homeAvgFTA,
+    h_stats.avg_ftp AS homeAvgFTP,
+    h_stats.avg_assists AS homeAvgAssists,
+    v_stats.avg_totReb AS visitorAvgTotReb,
+    v_stats.avg_fgm AS visitorAvgFGM,
+    v_stats.avg_fga AS visitorAvgFGA,
+    v_stats.avg_fgp AS visitorAvgFGP,
+    v_stats.avg_tpm AS visitorAvgTPM,
+    v_stats.avg_tpa AS visitorAvgTPA,
+    v_stats.avg_tpp AS visitorAvgTPP,
+    v_stats.avg_ftm AS visitorAvgFTM,
+    v_stats.avg_fta AS visitorAvgFTA,
+    v_stats.avg_ftp AS visitorAvgFTP,
+    v_stats.avg_assists AS visitorAvgAssists
+FROM tbl_games h
+JOIN tbl_games v ON v.game_id = h.game_id 
+JOIN TeamStats h_stats ON h.teamCode = h_stats.teamCode AND h.game_id = h_stats.game_id
+JOIN TeamStats v_stats ON v.teamCode = v_stats.teamCode AND v.game_id = v_stats.game_id
+WHERE h.home = 1 
+    AND v.home = 0 
+    AND h.teamName <> '' 
+    AND v.teamName <> ''
+    AND h.season = 2024
+ORDER BY h.date DESC 
+LIMIT 1000;
