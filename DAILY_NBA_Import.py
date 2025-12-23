@@ -417,8 +417,8 @@ def getMoneylineOdds(today):
                     home_odds = next((odd["price"] for odd in h2h_odds if odd["name"] == home_team), None)
                     away_odds = next((odd["price"] for odd in h2h_odds if odd["name"] == away_team), None)
                     odds_list.append({
-                        "home": home_team,
-                        "away": away_team,
+                        "home": checkClippersOddsName(home_team),
+                        "away": checkClippersOddsName(away_team),
                         "home_h2h_odds": home_odds,
                         "away_h2h_odds": away_odds
                     })
@@ -426,6 +426,12 @@ def getMoneylineOdds(today):
     else:
         print(f"Error: {response.status_code}, {response.text}")
         return []
+    
+def checkClippersOddsName(name):
+    if(name == "Los Angeles Clippers"):
+        return "LA Clippers"
+    else:
+        return name
 
 ######################################################################
 #MAIN

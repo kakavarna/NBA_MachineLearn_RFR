@@ -8,7 +8,7 @@ WITH squaredErrors AS (
    FROM tbl_predictions p
    INNER JOIN view_train t ON t.GameID = p.game_id
    ORDER BY DATE desc
-   LIMIT 200
+   LIMIT 100
 )
 SELECT 
    'RMSE homePoints' AS metric, 
@@ -36,7 +36,7 @@ SELECT
 			date from view_validate 
 			WHERE ActualWinner IS NOT NULL 
 			ORDER BY DATE desc
-			LIMIT 200
+			LIMIT 100
 			)
 		SELECT ROUND((SUM(WRONG))/COUNT(*)*100,2) AS RATE
 		FROM winners) AS value
