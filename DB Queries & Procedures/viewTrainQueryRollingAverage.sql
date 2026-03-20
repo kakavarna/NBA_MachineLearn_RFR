@@ -97,6 +97,6 @@ WHERE h.home = 1
     AND v.home = 0 
     AND h.teamName <> '' 
     AND v.teamName <> ''
-    AND h.season = 2024
+    AND h.season = 2025
 ORDER BY h.date DESC 
 LIMIT 1000;
