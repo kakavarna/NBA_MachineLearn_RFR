@@ -289,7 +289,10 @@ def savePlayerData(playerGameStats,season):
     InsertSQL += "'" + playerGameStats['player']['lastname'].replace("'","''") + "',"
     InsertSQL += "'" + playerGameStats['team']['name'] + "',"
     InsertSQL += "'" + playerGameStats['team']['code'] + "',"
-    InsertSQL += convertStr(playerGameStats['min']) + ","
+    if(convertStr(playerGameStats['min']) == "--"):
+        InsertSQL += "0,"
+    else:
+        InsertSQL += convertStr(playerGameStats['min']) + ","
     InsertSQL += convertStr(playerGameStats['points']) + ","
     InsertSQL += convertStr(playerGameStats['fgm']) + ","
     InsertSQL += convertStr(playerGameStats['fga']) + ","
